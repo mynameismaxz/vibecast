@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Play, Pause, Volume2, VolumeX, Radio, Timer, X, Sun, Moon } from 'lucide-react'
-import { animate, stagger } from 'motion'
+import { Play, Pause, Volume2, VolumeX, Radio, Timer, X, ChevronRight, ListMusic, Sun, Moon } from 'lucide-react'
 import './App.css'
 
 const STATIONS = [
@@ -24,28 +23,32 @@ function App() {
   const [volume, setVolume] = useState(0.7)
   const [isMuted, setIsMuted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [sleepTimeRemaining, setSleepTimeRemaining] = useState(null)
-  const [showSleepTimerModal, setShowSleepTimerModal] = useState(false)
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('theme')
-    return saved || 'dark'
-  })
+  const [showStationsModal, setShowStationsModal] = useState(false)
   const [nowPlaying, setNowPlaying] = useState(null)
+  const [albumArt, setAlbumArt] = useState(null)
+  const [albumArtLoading, setAlbumArtLoading] = useState(false)
+  const [mediaSessionSupported] = useState(() => 'mediaSession' in navigator)
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const audioRef = useRef(null)
-  const sleepTimerRef = useRef(null)
-  const metadataIntervalRef = useRef(null)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('theme', theme)
   }, [theme])
 
+  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+  const metadataIntervalRef = useRef(null)
+
+  const [sleepTimeRemaining, setSleepTimeRemaining] = useState(null)
+  const [showSleepTimerModal, setShowSleepTimerModal] = useState(false)
+  const sleepTimerRef = useRef(null)
+
   useEffect(() => {
-    animate('.station-card', 
-      { opacity: [0, 1], y: [20, 0] },
-      { delay: stagger(0.1), duration: 0.6 }
-    )
-  }, [])
+    if (audioRef.current) {
+      audioRef.current.src = currentStation.stream
+      audioRef.current.load()
+    }
+  }, [currentStation])
 
   useEffect(() => {
     if (sleepTimeRemaining !== null && sleepTimeRemaining > 0) {
@@ -71,45 +74,122 @@ function App() {
   }, [sleepTimeRemaining])
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.src = currentStation.stream
-      audioRef.current.load()
-    }
-  }, [currentStation])
-
-  useEffect(() => {
     document.title = isPlaying 
-      ? `▶ ${currentStation.name} - Radio`
-      : `Radio - ${currentStation.name}`
+      ? `▶ ${currentStation.name} - VibeCast`
+      : `VibeCast - ${currentStation.name}`
   }, [isPlaying, currentStation])
 
   useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+
+    if (!isPlaying) {
+      navigator.mediaSession.playbackState = 'none'
+      return
+    }
+
+    const [artist, title] = nowPlaying
+      ? nowPlaying.includes(' - ')
+        ? nowPlaying.split(' - ').map(s => s.trim())
+        : [currentStation.name, nowPlaying]
+      : [currentStation.genre, currentStation.name]
+
+    const absoluteBase = `${window.location.origin}`
+    const fallbackArt = `${absoluteBase}/favicon.svg`
+    const artworkList = albumArt
+      ? [{ src: albumArt, sizes: '400x400', type: 'image/jpeg' }]
+      : [{ src: fallbackArt, sizes: '512x512', type: 'image/svg+xml' }]
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title,
+      artist,
+      album: 'VibeCast · ' + currentStation.location,
+      artwork: artworkList,
+    })
+    navigator.mediaSession.playbackState = 'playing'
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      audioRef.current?.play()
+      setIsPlaying(true)
+    })
+    navigator.mediaSession.setActionHandler('pause', () => {
+      audioRef.current?.pause()
+      setIsPlaying(false)
+    })
+    navigator.mediaSession.setActionHandler('stop', () => {
+      audioRef.current?.pause()
+      setIsPlaying(false)
+    })
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+      const idx = STATIONS.findIndex(s => s.id === currentStation.id)
+      const prev = STATIONS[(idx - 1 + STATIONS.length) % STATIONS.length]
+      selectStation(prev)
+    })
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+      const idx = STATIONS.findIndex(s => s.id === currentStation.id)
+      const next = STATIONS[(idx + 1) % STATIONS.length]
+      selectStation(next)
+    })
+  }, [isPlaying, nowPlaying, currentStation, albumArt])
+
+  const fetchAlbumArtFromITunes = async (artist, title, signal) => {
+    if (!artist && !title) return null
+    try {
+      const query = encodeURIComponent(`${artist || ''} ${title || ''}`.trim())
+      const res = await fetch(
+        `https://itunes.apple.com/search?term=${query}&media=music&limit=1`,
+        { signal }
+      )
+      const data = await res.json()
+      const artwork = data.results?.[0]?.artworkUrl100
+      return artwork ? artwork.replace('100x100bb', '400x400bb') : null
+    } catch {
+      return null
+    }
+  }
+
+  useEffect(() => {
+    const abortController = new AbortController()
+    const { signal } = abortController
+
     const fetchNowPlaying = async () => {
       if (!isPlaying || !currentStation.mountName) return
-      
       try {
         const response = await fetch(
-          `https://np.tritondigital.com/public/nowplaying?mountName=${currentStation.mountName}&numberToFetch=1`
+          `https://np.tritondigital.com/public/nowplaying?mountName=${currentStation.mountName}&numberToFetch=1`,
+          { signal }
         )
         const xmlText = await response.text()
-        
+
         const parser = new DOMParser()
         const xmlDoc = parser.parseFromString(xmlText, 'text/xml')
-        
+
         const nowPlayingInfo = xmlDoc.querySelector('nowplaying-info')
         if (nowPlayingInfo) {
           const titleProp = nowPlayingInfo.querySelector('property[name="cue_title"]')
           const artistProp = nowPlayingInfo.querySelector('property[name="track_artist_name"]')
-          
+          const coverProp = nowPlayingInfo.querySelector('property[name="track_cover_url"]')
+
           const title = titleProp?.textContent?.trim() || 'Unknown Track'
           const artist = artistProp?.textContent?.trim()
-          
+          const tritonCover = coverProp?.textContent?.trim() || null
+
           const songInfo = artist ? `${artist} - ${title}` : title
           setNowPlaying(songInfo)
           document.title = `▶ ${songInfo} - ${currentStation.name}`
+
+          if (title !== 'Unknown Track') {
+            setAlbumArtLoading(true)
+            const art = tritonCover || await fetchAlbumArtFromITunes(artist, title, signal)
+            if (!signal.aborted) {
+              setAlbumArt(art)
+              setAlbumArtLoading(false)
+            }
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch now playing:', error)
+        if (error.name !== 'AbortError') {
+          console.error('Failed to fetch now playing:', error)
+        }
       }
     }
 
@@ -117,13 +197,15 @@ function App() {
       fetchNowPlaying()
       metadataIntervalRef.current = setInterval(fetchNowPlaying, 10000)
     } else {
-      setNowPlaying(null)
       if (metadataIntervalRef.current) {
         clearInterval(metadataIntervalRef.current)
       }
+      setNowPlaying(null)
+      setAlbumArt(null)
     }
 
     return () => {
+      abortController.abort()
       if (metadataIntervalRef.current) {
         clearInterval(metadataIntervalRef.current)
       }
@@ -156,6 +238,7 @@ function App() {
     }
     setCurrentStation(station)
     setIsPlaying(false)
+    setShowStationsModal(false)
     
     if (wasPlaying) {
       setTimeout(() => togglePlay(), 100)
@@ -209,32 +292,66 @@ function App() {
     }
   }
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
-  }
-
   return (
     <div className="app">
-      <div className="grain"></div>
-      
       <header className="header">
         <div className="logo">
           <Radio className="logo-icon" />
-          <h1>Radio</h1>
+          <h1>VibeCast</h1>
         </div>
         <div className="header-right">
-          <div className="tagline">Singapore Stations</div>
+          <button className="theme-toggle" onClick={() => setShowStationsModal(true)} aria-label="Station list">
+            <ListMusic size={22} />
+          </button>
           <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            {theme === 'dark' ? <Sun size={22} /> : <Moon size={22} />}
           </button>
         </div>
       </header>
 
       <main className="main">
-        <div className="player-section">
-          <div className="now-playing">
+        <section className="player-card">
+          <div className="now-playing-container">
+            <div className="album-art-wrapper">
+              {(isPlaying || albumArt) && (
+                <div className={`album-art-container ${isPlaying && albumArt ? 'playing' : ''}`}>
+                  {albumArtLoading ? (
+                    <div className="album-art-skeleton" aria-label="Loading album art" />
+                  ) : albumArt ? (
+                    <img
+                      src={albumArt}
+                      alt={nowPlaying ? `Album art for ${nowPlaying}` : 'Album art'}
+                      className="album-art-img"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="album-art-placeholder" aria-hidden="true">
+                      <Radio size={40} color="var(--golden-orange)" />
+                    </div>
+                  )}
+                  {isPlaying && (
+                    <div className="album-art-visualizer">
+                      <div className="bar"></div>
+                      <div className="bar"></div>
+                      <div className="bar"></div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="station-info">
-              <div className="callsign">{currentStation.callsign}</div>
+              <div className="callsign-row">
+                <div className="callsign">{currentStation.callsign}</div>
+                {mediaSessionSupported && (
+                  <div className="mediasession-badge" title="Media controls available in OS">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                    OS Media
+                  </div>
+                )}
+              </div>
               <div className="station-name">{currentStation.name}</div>
               {nowPlaying && (
                 <div className="now-playing-track">♫ {nowPlaying}</div>
@@ -259,84 +376,120 @@ function App() {
             </div>
           </div>
 
-          <div className="controls">
-            <button 
-              className={`play-button ${isPlaying ? 'playing' : ''} ${isLoading ? 'loading' : ''}`}
-              onClick={togglePlay}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <div className="spinner"></div>
-              ) : isPlaying ? (
-                <Pause size={32} />
-              ) : (
-                <Play size={32} />
-              )}
-            </button>
-
-            <div className="volume-control">
-              <button className="volume-button" onClick={toggleMute}>
-                {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+          <div className="controls-row">
+            <div className="main-controls">
+              <button 
+                className={`play-button ${isPlaying ? 'playing' : ''} ${isLoading ? 'loading' : ''}`}
+                onClick={togglePlay}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <div className="spinner"></div>
+                ) : isPlaying ? (
+                  <Pause fill="currentColor" size={32} />
+                ) : (
+                  <Play fill="currentColor" size={32} style={{ marginLeft: '4px' }} />
+                )}
               </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={handleVolumeChange}
-                className="volume-slider"
-              />
             </div>
 
-            <button 
-              className={`sleep-timer-button ${sleepTimeRemaining ? 'active' : ''}`}
-              onClick={() => sleepTimeRemaining ? cancelSleepTimer() : setShowSleepTimerModal(true)}
-            >
-              <Timer size={20} />
-              {sleepTimeRemaining && (
-                <span className="countdown-text">{formatTime(sleepTimeRemaining)}</span>
-              )}
+            <div className="secondary-controls">
+              <div className="volume-control">
+                <button className={`icon-button ${isMuted || volume === 0 ? '' : 'active'}`} onClick={toggleMute}>
+                  {isMuted || volume === 0 ? <VolumeX size={24} /> : <Volume2 size={24} />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  onChange={handleVolumeChange}
+                  className="volume-slider"
+                />
+              </div>
+
+              <button 
+                className={`icon-button timer-button ${sleepTimeRemaining ? 'active' : ''}`}
+                onClick={() => sleepTimeRemaining ? cancelSleepTimer() : setShowSleepTimerModal(true)}
+                title="Sleep Timer"
+              >
+                <Timer size={24} />
+                {sleepTimeRemaining && (
+                  <span className="countdown-text">{formatTime(sleepTimeRemaining)}</span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="station-selector">
+            <button className="station-select-btn" onClick={() => setShowStationsModal(true)}>
+              <span>Change Station ({currentStation.name})</span>
+              <ChevronRight size={24} />
             </button>
           </div>
-        </div>
-
-        <div className="stations-section">
-          <h2 className="section-title">Stations</h2>
-          <div className="stations-grid">
-            {STATIONS.map((station) => (
-              <button
-                key={station.id}
-                className={`station-card ${currentStation.id === station.id ? 'active' : ''}`}
-                onClick={() => selectStation(station)}
-              >
-                <div className="station-card-header">
-                  <div className="station-callsign">{station.callsign}</div>
-                  {currentStation.id === station.id && isPlaying && (
-                    <div className="live-indicator">
-                      <span className="pulse"></span>
-                      LIVE
-                    </div>
-                  )}
-                </div>
-                <div className="station-card-name">{station.name}</div>
-                <div className="station-card-meta">
-                  <span>{station.location}</span>
-                </div>
-                <div className="station-card-genre">{station.genre}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+        </section>
       </main>
 
+      <footer className="footer">
+        <span>&copy; {new Date().getFullYear()} VibeCast • Singapore Radio Stations</span>
+        <a
+          href="https://github.com/mynameismaxz/vibecast"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="footer-link"
+          aria-label="View source on GitHub"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.84 1.236 1.84 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </footer>
+
+      {showStationsModal && (
+        <div className="modal-overlay" onClick={() => setShowStationsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Select Station</h2>
+              <button className="close-btn" onClick={() => setShowStationsModal(false)}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="stations-list">
+              {STATIONS.map(station => (
+                <button 
+                  key={station.id} 
+                  className={`station-list-item ${currentStation.id === station.id ? 'active' : ''}`}
+                  onClick={() => selectStation(station)}
+                >
+                  <div className="station-list-info">
+                    <h3>{station.name}</h3>
+                    <p>{station.genre} • {station.location}</p>
+                  </div>
+                  {currentStation.id === station.id && isPlaying ? (
+                    <div className="visualizer" style={{ height: '24px' }}>
+                      <div className="bar"></div>
+                      <div className="bar"></div>
+                      <div className="bar"></div>
+                    </div>
+                  ) : currentStation.id === station.id ? (
+                    <Play size={24} color="var(--golden-orange)" />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSleepTimerModal && (
-        <div className="sleep-timer-modal-overlay" onClick={() => setShowSleepTimerModal(false)}>
-          <div className="sleep-timer-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="sleep-timer-header">
-              <h3>Sleep Timer</h3>
-              <button className="close-button" onClick={() => setShowSleepTimerModal(false)}>
-                <X size={20} />
+        <div className="modal-overlay" onClick={() => setShowSleepTimerModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Sleep Timer</h2>
+              <button className="close-btn" onClick={() => setShowSleepTimerModal(false)}>
+                <X size={24} />
               </button>
             </div>
 
@@ -344,11 +497,10 @@ function App() {
               <button onClick={() => startSleepTimer(15)}>15 min</button>
               <button onClick={() => startSleepTimer(30)}>30 min</button>
               <button onClick={() => startSleepTimer(45)}>45 min</button>
-              <button onClick={() => startSleepTimer(60)}>60 min</button>
-              <button onClick={() => startSleepTimer(90)}>90 min</button>
+              <button onClick={() => startSleepTimer(60)}>1 hour</button>
+              <button onClick={() => startSleepTimer(90)}>1.5 hours</button>
+              <button onClick={() => startSleepTimer(120)}>2 hours</button>
             </div>
-
-            <div className="sleep-timer-divider">or</div>
 
             <form className="sleep-timer-custom" onSubmit={handleCustomTimer}>
               <input
@@ -356,10 +508,10 @@ function App() {
                 name="customMinutes"
                 min="1"
                 max="999"
-                placeholder="Custom minutes"
+                placeholder="Custom minutes..."
                 required
               />
-              <button type="submit">Start</button>
+              <button type="submit">Start Timer</button>
             </form>
           </div>
         </div>
@@ -375,3 +527,4 @@ function App() {
 }
 
 export default App
+

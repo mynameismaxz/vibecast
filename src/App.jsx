@@ -6,7 +6,7 @@ const STATIONS = [
   { id: 1, name: 'Class 95', callsign: 'CLASS 95', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/CLASS95_PREM.aac', mountName: 'CLASS95_PREM', location: 'Singapore', genre: 'Pop & Hits' },
   { id: 2, name: '987 FM', callsign: '987 FM', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/987FM_PREM.aac', mountName: '987FM_PREM', location: 'Singapore', genre: 'Rock & Pop' },
   { id: 3, name: 'Gold 905', callsign: 'GOLD 905', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/GOLD905_PREM.aac', mountName: 'GOLD905_PREM', location: 'Singapore', genre: 'Oldies' },
-  { id: 4, name: 'Kiss92', callsign: 'KISS 92', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/KISS_92_PREM.aac', mountName: 'KISS_92_PREM', location: 'Singapore', genre: 'Adult Contemporary' },
+  { id: 4, name: 'Kiss92', callsign: 'KISS 92', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/KISS_92_SC', mountName: 'KISS_92', location: 'Singapore', genre: 'Adult Contemporary' },
   { id: 5, name: 'YES 933', callsign: 'YES 933', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/YES933_PREM.aac', mountName: 'YES933_PREM', location: 'Singapore', genre: 'Chinese Pop' },
   { id: 6, name: 'Love 972', callsign: 'LOVE 972', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/LOVE972FM_PREM.aac', mountName: 'LOVE972FM_PREM', location: 'Singapore', genre: 'Chinese Hits' },
   { id: 7, name: 'Capital 958', callsign: 'CAPITAL 958', stream: 'https://playerservices.streamtheworld.com/api/livestream-redirect/CAPITAL958FM_PREM.aac', mountName: 'CAPITAL958FM_PREM', location: 'Singapore', genre: 'Chinese News' },

@@ -1,30 +1,86 @@
 :root {
-  --charcoal: #353531;
-  --paprika: #ec4e20;
-  --saffron: #ff9505;
-  --marine: #016fb9;
-  --black: #000000;
+  --light-gold: #f3e37c;
+  --royal-gold: #f3d34a;
+  --golden-apricot: #eea243;
+  --golden-orange: #f3a738;
+  --soft-peach: #f1d9a7;
   
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'Outfit', sans-serif;
-}
-
-[data-theme="dark"] {
-  --bg-primary: #000000;
-  --bg-secondary: #0a0a0a;
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --text-dim: rgba(255, 255, 255, 0.4);
-  --border: rgba(255, 255, 255, 0.08);
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'Work Sans', sans-serif;
 }
 
 [data-theme="light"] {
-  --bg-primary: #fafafa;
-  --bg-secondary: #ffffff;
-  --text-primary: #0a0a0a;
-  --text-secondary: rgba(0, 0, 0, 0.7);
-  --text-dim: rgba(0, 0, 0, 0.4);
-  --border: rgba(0, 0, 0, 0.08);
+  /* Page background — a very soft warm white */
+  --bg-page: #f2f2f7;
+  /* Used for backwards-compat references */
+  --bg-primary: #f2f2f7;
+  --bg-secondary: rgba(255, 255, 255, 0.72);
+
+  /* Glass card */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-blur: blur(24px) saturate(180%);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 1px 0 rgba(255,255,255,0.9) inset;
+
+  /* Controls tray inside card */
+  --tray-bg: rgba(242, 242, 247, 0.7);
+  --tray-blur: blur(16px);
+
+  --text-primary: #1c1c1e;
+  --text-secondary: #3a3a3c;
+  --text-dim: #8e8e93;
+
+  --border: rgba(60, 60, 67, 0.12);
+  --shadow-color: rgba(243, 167, 56, 0.18);
+  --soft-peach: rgba(243, 167, 56, 0.12);
+
+  --overlay-bg: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] {
+  /* Page background — deep iOS-style near-black */
+  --bg-page: #000000;
+  --bg-primary: #000000;
+  --bg-secondary: rgba(28, 28, 30, 0.8);
+
+  /* Glass card */
+  --glass-bg: rgba(28, 28, 30, 0.72);
+  --glass-blur: blur(24px) saturate(180%);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255,255,255,0.06) inset;
+
+  /* Controls tray inside card */
+  --tray-bg: rgba(44, 44, 46, 0.7);
+  --tray-blur: blur(16px);
+
+  --text-primary: #f5f5f7;
+  --text-secondary: #ebebf0;
+  --text-dim: #636366;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --soft-peach: rgba(243, 167, 56, 0.15);
+
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+#root {
+  min-height: 100vh;
 }
 
 * {
